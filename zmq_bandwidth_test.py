@@ -34,22 +34,27 @@ def test_rep(service_uri):
     sock = zmq.Socket(ctx, zmq.REP)
     sock.bind(service_uri)
 
-    while True:
-        message = sock.recv_pyobj()
-        if message == 'READY':
-            sock.send_pyobj('OK')
-            end, start, data = timed_recv(sock)
-            print '[RESULT] bandwidth of REQ -> REP: {:.1f} MB/s'.format(
-                    mbytes_per_second(end, start, data))
-            sock.send_pyobj('DONE')
-
+    try:
+        while True:
             message = sock.recv_pyobj()
-            if message == 'OK':
-                # Other end has started the blocking read, so send the data payload.
-                sock.send_pyobj(data)
+            if message == 'READY':
+                sock.send_pyobj('OK')
+                end, start, data = timed_recv(sock)
+                print '[RESULT] bandwidth of REQ -> REP: %.1f MB/s'\
+                        % mbytes_per_second(end, start, data)
+                sock.send_pyobj('DONE')
+
                 message = sock.recv_pyobj()
-                if message == 'DONE':
-                    sock.send_pyobj('OK')
+                if message == 'OK':
+                    # Other end has started the blocking read, so send the data payload.
+                    sock.send_pyobj(data)
+                    message = sock.recv_pyobj()
+                    if message == 'DONE':
+                        sock.send_pyobj('OK')
+    except KeyboardInterrupt:
+        pass
+    finally:
+        sock.close()
 
 
 def test_req(service_uri, byte_count):
@@ -69,8 +74,8 @@ def test_req(service_uri, byte_count):
         if message == 'DONE':
             sock.send_pyobj('OK')
             end, start, data = timed_recv(sock)
-            print '[RESULT] bandwidth of REP -> REQ: {:.1f} MB/s'.format(
-                    mbytes_per_second(end, start, data))
+            print '[RESULT] bandwidth of REP -> REQ: %.1f MB/s'\
+                    % mbytes_per_second(end, start, data)
             sock.send_pyobj('DONE')
             message = sock.recv_pyobj()
             if message == 'OK':
