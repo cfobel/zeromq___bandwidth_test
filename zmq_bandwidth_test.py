@@ -79,8 +79,8 @@ def test_req(service_uri, byte_count):
             sock.send_pyobj('DONE')
             message = sock.recv_pyobj()
             if message == 'OK':
-                print '[OK] Test complete for service_uri={}, payload size (kB)={}'\
-                        .format(service_uri, byte_count >> 10)
+                print '[OK] Test complete for service_uri=%s, payload size (kB)=%d'\
+                        % (service_uri, byte_count >> 10)
 
 
 def parse_args():
