@@ -1,3 +1,4 @@
+from __future__ import division
 from datetime import datetime
 
 import numpy as np
@@ -19,22 +20,27 @@ def send_bytes(sock, byte_count):
     sock.send_pyobj(np.ones(byte_count, dtype=np.int8))
 
 
+def mbytes_per_second(start, end, data):
+    bytes_per_second = int(data.size * data.dtype.itemsize / total_seconds(end - start))
+    return bytes_per_second / (1 << 20)
+
+
 def kbytes_per_second(start, end, data):
     bytes_per_second = int(data.size * data.dtype.itemsize / total_seconds(end - start))
-    return (bytes_per_second >> 10)
+    return bytes_per_second / (1 << 10)
 
 
-def test_rep(port):
+def test_rep(service_uri):
     sock = zmq.Socket(ctx, zmq.REP)
-    sock.bind('tcp://*:54321')
+    sock.bind(service_uri)
 
     while True:
         message = sock.recv_pyobj()
         if message == 'READY':
             sock.send_pyobj('OK')
             end, start, data = timed_recv(sock)
-            print '[RESULT] bandwidth of REQ -> REP: {} kB/s'.format(
-                    kbytes_per_second(end, start, data))
+            print '[RESULT] bandwidth of REQ -> REP: {:.1f} MB/s'.format(
+                    mbytes_per_second(end, start, data))
             sock.send_pyobj('DONE')
 
             message = sock.recv_pyobj()
@@ -46,9 +52,10 @@ def test_rep(port):
                     sock.send_pyobj('OK')
 
 
-def test_req(port, byte_count):
+def test_req(service_uri, byte_count):
     sock = zmq.Socket(ctx, zmq.REQ)
-    sock.connect('tcp://localhost:54321')
+    sock.connect(service_uri)
+
     # Inform the other end that we are ready to send some data.  The other end
     # responds with 'OK' to let us know when it is about to start waiting on a
     # blocking receive of the data payload.
@@ -62,28 +69,40 @@ def test_req(port, byte_count):
         if message == 'DONE':
             sock.send_pyobj('OK')
             end, start, data = timed_recv(sock)
-            print '[RESULT] bandwidth of REP -> REQ: {} kB/s'.format(
-                    kbytes_per_second(end, start, data))
+            print '[RESULT] bandwidth of REP -> REQ: {:.1f} MB/s'.format(
+                    mbytes_per_second(end, start, data))
             sock.send_pyobj('DONE')
             message = sock.recv_pyobj()
             if message == 'OK':
-                print '[OK] Test complete for port={}, payload size (kB)={}'\
-                        .format(port, byte_count)
+                print '[OK] Test complete for service_uri={}, payload size (kB)={}'\
+                        .format(service_uri, byte_count >> 10)
+
+
+def parse_args():
+    """Parses arguments, returns ``(options, args)``."""
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser(description="""\
+Server/client for testing bandwidth between endpoints using zermoq.""",
+                           )
+    parser.add_argument(nargs=1, dest='action', type=str, default='connect',
+            choices=['connect', 'bind'])
+    parser.add_argument(nargs=1, dest='service_uri', type=str)
+    parser.add_argument(nargs='?', dest='byte_count', type=int, default=10 << 20)
+
+    args = parser.parse_args()
+    args.action = args.action[0]
+    args.service_uri = args.service_uri[0]
+
+    return args
 
 
 if __name__ == '__main__':
-    import sys
-
-    def print_usage():
-        raise SystemExit, 'usage: %s bind|connect' % sys.argv[0]
-
-    if not len(sys.argv) == 2 or sys.argv[1] not in ('bind', 'connect'):
-        print_usage()
+    args = parse_args()
 
     ctx = zmq.Context.instance()
 
-    port = 54321
-    if sys.argv[1] == 'bind':
-        test_rep(port)
+    if args.action == 'bind':
+        test_rep(args.service_uri)
     else:
-        test_req(port, 50 << 20)
+        test_req(args.service_uri, args.byte_count)
