@@ -20,8 +20,8 @@ def send_bytes(sock, byte_count):
 
 
 def kbytes_per_second(start, end, data):
-    return int(data.size * data.dtype.itemsize / total_seconds(end - start)) >> 10
-
+    bytes_per_second = int(data.size * data.dtype.itemsize / total_seconds(end - start))
+    return (bytes_per_second >> 10)
 
 
 def test_rep(port):
@@ -33,6 +33,8 @@ def test_rep(port):
         if message == 'READY':
             sock.send_pyobj('OK')
             end, start, data = timed_recv(sock)
+            print '[RESULT] bandwidth of REQ -> REP: {} kB/s'.format(
+                    kbytes_per_second(end, start, data))
             sock.send_pyobj('DONE')
 
             message = sock.recv_pyobj()
@@ -60,6 +62,8 @@ def test_req(port, byte_count):
         if message == 'DONE':
             sock.send_pyobj('OK')
             end, start, data = timed_recv(sock)
+            print '[RESULT] bandwidth of REP -> REQ: {} kB/s'.format(
+                    kbytes_per_second(end, start, data))
             sock.send_pyobj('DONE')
             message = sock.recv_pyobj()
             if message == 'OK':
@@ -82,4 +86,4 @@ if __name__ == '__main__':
     if sys.argv[1] == 'bind':
         test_rep(port)
     else:
-        test_req(port, 1 << 20)
+        test_req(port, 50 << 20)
